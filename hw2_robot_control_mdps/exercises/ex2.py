@@ -46,6 +46,7 @@ def pid_control(tracking_error_history, timestep, Kp=150.0, Ki=0.0, Kd=0.01):
     Returns:
         np.ndarray: Control signal.
     """
+    tracking_error_history = np.asarray(tracking_error_history)
     proportional = tracking_error_history[-1]
     integral = np.sum(tracking_error_history * timestep)
     derivative = 0 if len(tracking_error_history) < 2 else (tracking_error_history[-1] - tracking_error_history[-2]) / timestep
