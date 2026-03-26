@@ -36,16 +36,31 @@ class ObstaclePolicy(BasePolicy):
     A simple MLP that maps a state vector to a flat action chunk
     (chunk_size * action_dim) and reshapes to (B, chunk_size, action_dim).
     """
+    def __init__(self, state_dim, action_dim, chunk_size, hidden_dim = 512):
+        self.d_model = hidden_dim
+        super().__init__(state_dim, action_dim, chunk_size)
+        self.net = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, action_dim * chunk_size)
+        )
+        self.loss_fn = nn.MSELoss()
 
-    def forward(self) -> torch.Tensor:
+    def forward(self, state) -> torch.Tensor:
         """Return predicted action chunk of shape (B, chunk_size, action_dim)."""
-        raise NotImplementedError
+        B = state.shape[0]
+        flat_actions = self.net(state)
+        return flat_actions.view(B, self.chunk_size, self.action_dim)
 
     def compute_loss(self, state: torch.Tensor, action_chunk: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
+        return self.loss_fn(self.forward(state), action_chunk)
 
     def sample_actions(self, state: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
+        return self.forward(state)
 
 
 # TODO: Students implement MultiTaskPolicy here.
@@ -71,13 +86,16 @@ def build_policy(
     *,
     state_dim: int,
     action_dim: int,
-    # TODO,
+    chunk_size: int = 16,
+    d_model: int = 512,
+    depth: int = 3,
 ) -> BasePolicy:
     if policy_type == "obstacle":
         return ObstaclePolicy(
             action_dim=action_dim,
             state_dim=state_dim,
-            # TODO: Build with your chosen specifications
+            chunk_size=chunk_size,
+            hidden_dim=512
         )
     if policy_type == "multitask":
         return MultiTaskPolicy(

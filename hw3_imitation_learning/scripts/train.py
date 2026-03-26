@@ -28,9 +28,9 @@ from hw3.model import BasePolicy, build_policy
 from torch.utils.data import DataLoader, random_split
 
 # TODO: Choose your own hyperparameters!
-EPOCHS = ... 
-BATCH_SIZE = ...
-LR = ...
+EPOCHS = 100
+BATCH_SIZE = 64
+LR = 1e-3
 VAL_SPLIT = 0.1
 
 
@@ -48,6 +48,17 @@ def train_one_epoch(
         states, action_chunks = batch
         # TODO: Implement the training step for one batch here.
         # This mostly: Get states and action_chunks onto the correct device, compute the loss, and step the optimizer.
+        states, action_chunks = batch
+        states = states.to(device)
+        action_chunks = action_chunks.to(device)
+
+        optimizer.zero_grad()
+        loss = model.compute_loss(states, action_chunks)
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item()
+        n_batches += 1
 
     return total_loss / max(n_batches, 1)
 
@@ -65,6 +76,14 @@ def evaluate(
     for batch in loader:
         states, action_chunks = batch
         # TODO: Implement the evaluation step for one batch here.
+        states, action_chunks = batch
+        states = states.to(device)
+        action_chunks = action_chunks.to(device)
+
+        loss = model.compute_loss(states, action_chunks)
+        
+        total_loss += loss.item()
+        n_batches += 1
 
     return total_loss / max(n_batches, 1)
 
@@ -102,6 +121,13 @@ def main() -> None:
         help="Action array key specs to concatenate, e.g. action_ee_xyz action_gripper. "
         "Supports column slicing with [:N], [M:], [M:N]. "
         "If omitted, uses the action_key attribute from the zarr metadata.",
+    )
+    parser.add_argument(
+        "--extra-zarr",
+        type=Path,
+        nargs="+",
+        default=None,
+        help="Additional processed .zarr stores to merge."
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     args = parser.parse_args()
@@ -160,6 +186,7 @@ def main() -> None:
         state_dim=states.shape[1],
         action_dim=actions.shape[1],
         # TODO: build with your desired specifications
+        chunk_size=args.chunk_size,
     ).to(device)
 
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -168,6 +195,8 @@ def main() -> None:
     # TODO: implement an optimizer and scheduler
     # optimizer =
     # scheduler =
+    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
 
     # ── training loop ─────────────────────────────────────────────────
     best_val = float("inf")
