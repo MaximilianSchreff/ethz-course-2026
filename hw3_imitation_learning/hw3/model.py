@@ -67,15 +67,30 @@ class ObstaclePolicy(BasePolicy):
 class MultiTaskPolicy(BasePolicy):
     """Goal-conditioned policy for the multicube scene."""
 
+    def __init__(self, state_dim: int, action_dim: int, chunk_size: int, hidden_dim: int = 1024):
+        super().__init__(state_dim, action_dim, chunk_size)
+        self.net = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, action_dim * chunk_size)
+        )
+        self.loss_fn = nn.MSELoss()
+
     def compute_loss(self, state: torch.Tensor, action_chunk: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
+        return self.loss_fn(self.forward(state), action_chunk)
 
     def sample_actions(self, state: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
+        return self.forward(state)
 
-    def forward(self) -> torch.Tensor:
+    def forward(self, state) -> torch.Tensor:
         """Return predicted action chunk of shape (B, chunk_size, action_dim)."""
-        raise NotImplementedError
+        B = state.shape[0]
+        flat_actions = self.net(state)
+        return flat_actions.view(B, self.chunk_size, self.action_dim)
 
 
 PolicyType: TypeAlias = Literal["obstacle", "multitask"]
@@ -101,6 +116,7 @@ def build_policy(
         return MultiTaskPolicy(
             action_dim=action_dim,
             state_dim=state_dim,
-            # TODO: Build with your chosen specifications
+            chunk_size=chunk_size,
+            hidden_dim=1024
         )
     raise ValueError(f"Unknown policy type: {policy_type}")
